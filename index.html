@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meeting Summary Roulette</title>
+    <!-- Tailwind CSS for rapid styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom bezier curve for a realistic, exciting spin deceleration */
+        .spin-transition {
+            transition: transform 4s cubic-bezier(0.15, 0.85, 0.25, 1);
+        }
+        
+        /* Modal animation */
+        @keyframes popIn {
+            0% { transform: scale(0.9); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-pop-in {
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen flex flex-col items-center justify-center p-6 font-sans">
+
+    <!-- Header -->
+    <div class="text-center mb-10">
+        <h1 class="text-4xl md:text-5xl font-extrabold text-slate-800 tracking-tight mb-2">Meeting Roulette</h1>
+        <p class="text-slate-500 text-lg">Who will summarize today's meeting?</p>
+    </div>
+
+    <!-- Roulette Container -->
+    <div class="relative w-full max-w-[400px] mx-auto aspect-square mb-10">
+        <!-- Pointer (Triangle) -->
+        <div class="absolute -top-6 left-1/2 -translate-x-1/2 w-0 h-0 
+                    border-x-[20px] border-x-transparent 
+                    border-t-[40px] border-t-rose-500 
+                    z-10 filter drop-shadow-md"></div>
+        
+        <!-- Wheel Canvas -->
+        <div class="rounded-full overflow-hidden shadow-2xl border-4 border-white bg-white w-full h-full">
+            <!-- Render at 800x800 for high DPI displays, scaled down by CSS -->
+            <canvas id="wheel" width="800" height="800" class="w-full h-full spin-transition origin-center"></canvas>
+        </div>
+    </div>
+
+    <!-- Spin Button -->
+    <button id="spinBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-12 rounded-full text-xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed">
+        Spin the Wheel!
+    </button>
+
+    <!-- Modal Background overlay -->
+    <div id="modalOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 hidden flex items-center justify-center p-4 opacity-0 transition-opacity duration-300">
+        <!-- Modal Content -->
+        <div id="modalContent" class="bg-white rounded-3xl p-8 md:p-10 max-w-md w-full shadow-2xl text-center transform scale-95 transition-transform duration-300">
+            <div class="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <svg class="w-10 h-10 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            
+            <h2 id="winnerText" class="text-3xl font-extrabold text-slate-800 mb-4">
+                Congratulations <span id="winnerName" class="text-indigo-600"></span>!
+            </h2>
+            
+            <p class="text-lg text-slate-600 mb-8 font-medium">
+                Please give us a summary of the meeting.
+            </p>
+            
+            <button id="closeBtn" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold py-3 px-6 rounded-xl transition-colors">
+                Close & Continue
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const names = ['Jessie', 'Manny', 'Mike', 'Mark', 'Divina', 'Nik', 'Jul'];
+        // Vibrant palette for the wheel slices
+        const colors = ['#FF595E', '#FFCA3A', '#8AC926', '#1982C4', '#6A4C93', '#F15BB5', '#00BBF9'];
+        
+        const canvas = document.getElementById('wheel');
+        const ctx = canvas.getContext('2d');
+        const spinBtn = document.getElementById('spinBtn');
+        const modalOverlay = document.getElementById('modalOverlay');
+        const modalContent = document.getElementById('modalContent');
+        const closeBtn = document.getElementById('closeBtn');
+        const winnerNameSpan = document.getElementById('winnerName');
+
+        const width = canvas.width;
+        const height = canvas.height;
+        const cx = width / 2;
+        const cy = height / 2;
+        const radius = width / 2;
+
+        let currentRotation = 0;
+        let isSpinning = false;
+
+        // Draw the wheel onto the canvas
+        function drawWheel() {
+            const sliceAngle = (2 * Math.PI) / names.length;
+
+            ctx.clearRect(0, 0, width, height);
+
+            for (let i = 0; i < names.length; i++) {
+                // Draw slice
+                ctx.beginPath();
+                ctx.moveTo(cx, cy);
+                ctx.arc(cx, cy, radius, i * sliceAngle, (i + 1) * sliceAngle);
+                ctx.fillStyle = colors[i % colors.length];
+                ctx.fill();
+
+                // Add subtle separator line
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = '#ffffff';
+                ctx.stroke();
+
+                // Draw Text
+                ctx.save();
+                ctx.translate(cx, cy);
+                // Rotate to the center of the current slice
+                ctx.rotate(i * sliceAngle + sliceAngle / 2);
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'middle';
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 45px sans-serif'; // Large font for 800px canvas
+                // Adjust x-position so it's padded from the edge
+                ctx.fillText(names[i], radius - 60, 0); 
+                ctx.restore();
+            }
+
+            // Draw center hub
+            ctx.beginPath();
+            ctx.arc(cx, cy, 40, 0, 2 * Math.PI);
+            ctx.fillStyle = '#ffffff';
+            ctx.fill();
+            ctx.lineWidth = 8;
+            ctx.strokeStyle = '#f8fafc';
+            ctx.stroke();
+            
+            // Draw inner hub shadow/detail
+            ctx.beginPath();
+            ctx.arc(cx, cy, 25, 0, 2 * Math.PI);
+            ctx.fillStyle = '#e2e8f0';
+            ctx.fill();
+        }
+
+        // Handle the spin logic
+        function spin() {
+            if (isSpinning) return;
+            isSpinning = true;
+            spinBtn.disabled = true;
+
+            // 1. Pick a random winner beforehand
+            const winnerIndex = Math.floor(Math.random() * names.length);
+            
+            // 2. Calculate the angles
+            const sliceAngleDegrees = 360 / names.length;
+            // The center angle of the winning slice (in standard 0-360 starting from right)
+            const centerOfWinner = (winnerIndex * sliceAngleDegrees) + (sliceAngleDegrees / 2);
+            
+            // The pointer is at the TOP (270 degrees in standard canvas rotation)
+            // To bring the center of our slice to 270 degrees, we calculate the required rotation
+            let targetRotation = 270 - centerOfWinner;
+            if (targetRotation < 0) targetRotation += 360;
+
+            // Add a slight random offset so it doesn't land exactly dead-center every time
+            const randomOffset = (Math.random() - 0.5) * (sliceAngleDegrees * 0.7);
+            targetRotation += randomOffset;
+
+            // 3. Figure out how much to add to our *current* rotation to reach the target
+            const remainder = currentRotation % 360;
+            let addedRotation = targetRotation - remainder;
+            if (addedRotation < 0) addedRotation += 360;
+
+            // Add 5 full spins (1800 degrees) for visual effect + the exact required rotation
+            const totalAddedRotation = (360 * 5) + addedRotation;
+            currentRotation += totalAddedRotation;
+
+            // Apply via CSS
+            canvas.style.transform = `rotate(${currentRotation}deg)`;
+
+            // Show modal after transition finishes
+            setTimeout(() => {
+                showModal(names[winnerIndex]);
+                isSpinning = false;
+                spinBtn.disabled = false;
+            }, 4100); // 4000ms transition + 100ms buffer
+        }
+
+        function showModal(name) {
+            winnerNameSpan.textContent = name;
+            modalOverlay.classList.remove('hidden');
+            // Trigger reflow for transition to work
+            void modalOverlay.offsetWidth; 
+            modalOverlay.classList.remove('opacity-0');
+            modalContent.classList.remove('scale-95');
+            modalContent.classList.add('animate-pop-in');
+        }
+
+        function closeModal() {
+            modalOverlay.classList.add('opacity-0');
+            modalContent.classList.add('scale-95');
+            modalContent.classList.remove('animate-pop-in');
+            
+            setTimeout(() => {
+                modalOverlay.classList.add('hidden');
+            }, 300); // match transition duration
+        }
+
+        // Event Listeners
+        spinBtn.addEventListener('click', spin);
+        closeBtn.addEventListener('click', closeModal);
+        
+        // Initial setup
+        drawWheel();
+    </script>
+</body>
+</html>
